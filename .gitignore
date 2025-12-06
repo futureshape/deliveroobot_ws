@@ -1,0 +1,60 @@
+# ROS2 workspace gitignore
+
+# Build artifacts
+build/
+install/
+log/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ROS generated files
+*.pyc
+*.pyo
+*.egg-info/
+.catkin_workspace
+devel/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Bags (recorded data - usually too large)
+*.bag
+*.db3
+*.mcap
+
+# Temporary files
+*.tmp
+*.bak
+*.orig
+
+# Documentation builds
+docs/_build/
+*.pdf
+
+# Config overrides (keep templates)
+*_local.yaml
+*_private.yaml
+
+# System files
+.directory
+Thumbs.db
+
+# Ignore meshes if they're large (comment out if you need them in git)
+# src/*/meshes/*.STL
+# src/*/meshes/*.stl
+# src/*/meshes/*.dae
+
+# Keep important files
+!.gitignore
+!README.md
+!LICENSE
