@@ -290,11 +290,14 @@ sudo apt install ros-${ROS_DISTRO}-navigation2
 ```
 yb_car_localization/
 ├── config/
-│   ├── ekf.yaml              # EKF configuration (frame-matched for YB_Car)
-│   └── yb_car_view.rviz      # RViz configuration
+│   ├── ekf.yaml                     # EKF configuration (frame-matched for YB_Car)
+│   ├── yb_car_view.rviz             # RViz config for localization
+│   ├── slam_toolbox_config.yaml     # SLAM Toolbox parameters
+│   └── slam_view.rviz               # RViz config for SLAM
 ├── launch/
 │   ├── sensor_fusion.launch.py      # EKF only
-│   └── localization.launch.py       # Complete system
+│   ├── localization.launch.py       # Complete localization system
+│   └── slam.launch.py               # SLAM mapping system
 ├── urdf/
 │   ├── yb_car.urdf.xacro     # Main URDF wrapper
 │   └── MicroROS.urdf         # Manufacturer's robot description
@@ -306,16 +309,160 @@ yb_car_localization/
 Workspace root scripts:
 ├── start_microros_agent.sh   # Start MicroROS Docker agent
 ├── stop_microros_agent.sh    # Stop MicroROS agent
-└── start_rviz.sh            # Launch RViz on local display
+├── start_rviz.sh             # Launch RViz for localization
+├── start_slam.sh             # Start SLAM mapping
+├── start_slam_rviz.sh        # Launch RViz for SLAM
+├── save_map.sh               # Save current SLAM map
+└── teleop_keyboard.sh        # Keyboard teleoperation
+
+Maps directory:
+└── maps/                     # Saved SLAM maps stored here
 ```
+
+## SLAM Mapping
+
+### Quick Start - Build Your First Map
+
+1. **Start the MicroROS agent** (connects to your robot):
+```bash
+./start_microros_agent.sh
+```
+
+2. **Start SLAM Toolbox** (in a new terminal):
+```bash
+./start_slam.sh
+```
+
+3. **Open RViz for visualization** (on your laptop - new terminal):
+```bash
+./start_slam_rviz.sh
+```
+
+4. **Drive the robot around** (in a new terminal):
+```bash
+./teleop_keyboard.sh
+```
+
+Use keyboard to drive:
+- `i` = forward
+- `k` = stop  
+- `j` = turn left
+- `l` = turn right
+- `u`/`o` = arc left/right
+- `m`/`,` = backward
+- `q`/`z` = increase/decrease speed
+
+5. **Watch the map build** in RViz as you drive around your environment
+
+6. **Save the map** when done:
+```bash
+./save_map.sh my_room_map
+```
+
+### Understanding SLAM
+
+SLAM (Simultaneous Localization and Mapping) allows your robot to:
+- Build a map of an unknown environment
+- Track its position within that map
+- Close loops when revisiting known areas
+
+**What you'll see:**
+- **Map** (gray grid): Occupancy grid showing free space (white), obstacles (black), unknown (gray)
+- **Laser scans** (colored dots): Current LiDAR readings
+- **Robot pose**: Position and orientation in the map
+- **TF tree**: Map → odom_frame → base_footprint transforms
+
+### SLAM Configuration
+
+The SLAM setup is configured in `config/slam_toolbox_config.yaml`:
+
+**Key Parameters:**
+- `minimum_travel_distance: 0.2` - Process scans every 20cm movement
+- `minimum_travel_heading: 0.2` - Process scans every 0.2 rad rotation
+- `resolution: 0.05` - Map resolution 5cm per pixel
+- `max_laser_range: 12.0` - Use laser readings up to 12m
+- `do_loop_closing: true` - Detect and correct drift when revisiting areas
+
+**Frames:**
+- `map_frame: map` - Global map coordinate frame
+- `odom_frame: odom_frame` - Odometry frame (matches YB_Car output)
+- `base_frame: base_footprint` - Robot base frame
+
+### Manual SLAM Launch
+
+If you want more control over the launch:
+
+```bash
+# Launch just SLAM (no RViz)
+ros2 launch yb_car_localization slam.launch.py launch_rviz:=false
+
+# Launch with RViz included
+ros2 launch yb_car_localization slam.launch.py launch_rviz:=true
+```
+
+### Saving Maps
+
+**Automatic save with script:**
+```bash
+./save_map.sh my_map_name
+```
+
+**Manual save using ROS services:**
+```bash
+# Save as SLAM pose graph (for later localization)
+ros2 service call /slam_toolbox/serialize_map slam_toolbox/srv/SerializePoseGraph \
+  "{filename: '/home/alex/deliveroobot_ws/maps/my_map'}"
+
+# Save as image + YAML (for Nav2)
+ros2 run nav2_map_server map_saver_cli -f /home/alex/deliveroobot_ws/maps/my_map
+```
+
+This creates:
+- `my_map.pgm` - Map image (grayscale)
+- `my_map.yaml` - Map metadata (resolution, origin, thresholds)
+- `my_map.posegraph` - SLAM pose graph
+- `my_map.data` - SLAM internal data
+
+### Tips for Good Maps
+
+1. **Drive slowly** - Give SLAM time to process scans
+2. **Close loops** - Return to starting point to reduce drift
+3. **Good lighting** - Ensure LiDAR has clear line of sight
+4. **Overlap coverage** - Drive paths that overlap for better loop closure
+5. **Avoid dynamic objects** - People walking, moving furniture creates artifacts
+6. **Feature-rich environment** - Corners and walls work better than open spaces
+
+### Troubleshooting SLAM
+
+**Map not building:**
+```bash
+# Check SLAM is receiving scans
+ros2 topic hz /scan
+
+# Check SLAM is publishing map
+ros2 topic hz /map
+
+# View SLAM logs
+ros2 node info /slam_toolbox
+```
+
+**Robot pose jumping:**
+- Too fast movement - slow down
+- Poor loop closure - improve overlap
+- Adjust `loop_match_minimum_response_fine` in config
+
+**Map quality issues:**
+- Increase `scan_buffer_size` for smoother maps
+- Decrease `minimum_travel_distance` for more detail
+- Tune `correlation_search_space_*` parameters
 
 ## Next Steps
 
-1. **Replace the URDF**: Update `urdf/yb_car.urdf.xacro` with your actual robot description
-2. **Test Sensor Fusion**: Launch and verify `/odometry/filtered` output
-3. **Tune EKF**: Adjust `ekf.yaml` parameters for your robot's characteristics
-4. **Add SLAM**: Integrate SLAM toolbox or Cartographer
-5. **Navigation**: Set up Nav2 for autonomous navigation
+1. ✅ **Sensor Fusion**: Configured and working (`/odometry/filtered`)
+2. ✅ **SLAM Mapping**: Ready to build maps with SLAM Toolbox
+3. **Localization**: Use saved maps for robot localization (AMCL or SLAM localization mode)
+4. **Navigation**: Set up Nav2 for autonomous path planning and obstacle avoidance
+5. **Advanced**: Multi-floor mapping, semantic mapping, exploration
 
 ## Additional Resources
 

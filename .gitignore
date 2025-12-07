@@ -54,6 +54,9 @@ Thumbs.db
 # src/*/meshes/*.stl
 # src/*/meshes/*.dae
 
+# Maps
+maps/
+
 # Keep important files
 !.gitignore
 !README.md
